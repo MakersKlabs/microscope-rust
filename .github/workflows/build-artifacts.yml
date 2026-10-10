@@ -51,7 +51,7 @@ jobs:
           name: microscope-rust-linux
           path: |
             target/release/microscope-rust
-            dist/*.AppImage
+            dist/Microscope-*.AppImage
             dist/*.tar.gz
 
       # ------------------------------------------------------------------

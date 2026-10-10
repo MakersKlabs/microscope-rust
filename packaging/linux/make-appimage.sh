@@ -23,7 +23,9 @@ install -m644 "$ROOT/packaging/linux/microscope-rust.metainfo.xml" "$APPDIR/usr/
 ln -sf usr/share/applications/microscope-rust.desktop "$APPDIR/microscope-rust.desktop"
 ln -sf usr/share/icons/hicolor/scalable/apps/microscope-rust.svg "$APPDIR/microscope-rust.svg"
 
-APPIMAGETOOL="${APPIMAGETOOL:-$ROOT/dist/appimagetool-$ARCH.AppImage}"
+TOOLS_DIR="$ROOT/build/tools"
+mkdir -p "$TOOLS_DIR" "$ROOT/dist"
+APPIMAGETOOL="${APPIMAGETOOL:-$TOOLS_DIR/appimagetool-$ARCH.AppImage}"
 if [ ! -x "$APPIMAGETOOL" ]; then
     echo "Downloading appimagetool..."
     curl -L -o "$APPIMAGETOOL" \
