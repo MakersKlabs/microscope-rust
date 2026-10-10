@@ -81,14 +81,15 @@ jobs:
           sh packaging/macos/bundle.sh
           hdiutil create -volname Microscope -srcfolder dist/Microscope.app \
             -ov -format UDZO dist/Microscope.dmg
+          ditto -c -k --keepParent dist/Microscope.app dist/Microscope-app.zip
       - name: Upload (macOS)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: microscope-rust-macos
           path: |
-            dist/Microscope.app
             dist/Microscope.dmg
+            dist/Microscope-app.zip
 
       - name: Binary size
         if: runner.os == 'Linux'

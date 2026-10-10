@@ -110,6 +110,7 @@ jobs:
         run: |
           hdiutil create -volname Microscope -srcfolder dist/Microscope.app \
             -ov -format UDZO dist/Microscope.dmg
+          ditto -c -k --keepParent dist/Microscope.app dist/Microscope-app.zip
 
       - name: Upload (macOS)
         if: runner.os == 'macOS'
@@ -117,8 +118,8 @@ jobs:
         with:
           name: microscope-rust-macos
           path: |
-            dist/Microscope.app
             dist/Microscope.dmg
+            dist/Microscope-app.zip
 
   release:
     name: Publish release
