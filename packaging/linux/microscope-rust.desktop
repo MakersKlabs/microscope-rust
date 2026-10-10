@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Microscope
+Name[it]=Microscopio
+GenericName=Microscope Capture
+GenericName[it]=Acquisizione microscopio
+Comment=Retro USB microscope camera capture
+Comment[it]=Acquisizione retro da telecamera per microscopio USB
+Exec=microscope-rust
+Icon=microscope-rust
+Terminal=false
+Categories=Science;Graphics;Education;
+Keywords=microscope;camera;video;capture;retro;
+Keywords[it]=microscopio;telecamera;video;acquisizione;retro;
+StartupNotify=true
+StartupWMClass=microscope-rust

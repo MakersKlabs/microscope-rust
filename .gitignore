@@ -1,0 +1,10 @@
+/target
+target/
+Cargo.lock.orig
+*.pdb
+*.dSYM/
+dist/
+release/
+.idea/
+.vscode/
+*.log

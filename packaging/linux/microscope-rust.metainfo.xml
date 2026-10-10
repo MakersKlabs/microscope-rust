@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>microscope-rust.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Microscope</name>
+  <summary>Retro USB microscope camera capture</summary>
+  <summary xml:lang="it">Acquisizione retro da microscopio USB</summary>
+  <description>
+    <p>
+      A minimal retro-styled terminal application to capture images and H.264
+      video from a high-resolution USB microscope camera. Written in Rust, it
+      ships as a small self-contained binary for Linux, Windows and macOS.
+    </p>
+    <p xml:lang="it">
+      Una applicazione minimale in stile terminale retro per acquisire immagini
+      e video H.264 da una telecamera USB ad alta risoluzione per microscopio.
+      Scritta in Rust, viene distribuita come binario autonomo e leggero per
+      Linux, Windows e macOS.
+    </p>
+  </description>
+  <launchable type="desktop-id">microscope-rust.desktop</launchable>
+  <icon type="stock">microscope-rust</icon>
+  <categories>
+    <category>Science</category>
+    <category>Graphics</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>
