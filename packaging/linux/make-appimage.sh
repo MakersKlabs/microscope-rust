@@ -31,5 +31,5 @@ if [ ! -x "$APPIMAGETOOL" ]; then
     chmod +x "$APPIMAGETOOL"
 fi
 
-ARCH="$ARCH" "$APPIMAGETOOL" "$APPDIR" "$ROOT/dist/Microscope-$VERSION-$ARCH.AppImage"
+ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" "$APPDIR" "$ROOT/dist/Microscope-$VERSION-$ARCH.AppImage"
 echo "Created $ROOT/dist/Microscope-$VERSION-$ARCH.AppImage"

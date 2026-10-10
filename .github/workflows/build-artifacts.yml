@@ -1,0 +1,94 @@
+name: Build artifacts
+
+# Builds ready-to-download executables/installers for Linux, Windows and macOS.
+# - runs on every push to main and on tags
+# - can be started manually from the Actions tab ("Run workflow")
+# Tagged commits are also published on the GitHub Releases page by release.yml.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+      - name: Tests
+        run: cargo test
+
+      # ------------------------------------------------------------------
+      # Linux: AppImage + tarball
+      # ------------------------------------------------------------------
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sh packaging/linux/make-appimage.sh
+          mkdir -p dist
+          tar -C target/release -czf dist/microscope-rust-linux-x86_64.tar.gz microscope-rust
+      - name: Upload (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: microscope-rust-linux
+          path: |
+            target/release/microscope-rust
+            dist/*.AppImage
+            dist/*.tar.gz
+
+      # ------------------------------------------------------------------
+      # Windows: standalone .exe + Inno Setup installer
+      # ------------------------------------------------------------------
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\windows\installer.iss
+      - name: Upload (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: microscope-rust-windows
+          path: |
+            target/release/microscope-rust.exe
+            dist/*.exe
+
+      # ------------------------------------------------------------------
+      # macOS: .app bundle + DMG
+      # ------------------------------------------------------------------
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sh packaging/macos/bundle.sh
+          hdiutil create -volname Microscope -srcfolder dist/Microscope.app \
+            -ov -format UDZO dist/Microscope.dmg
+      - name: Upload (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: microscope-rust-macos
+          path: |
+            dist/Microscope.app
+            dist/Microscope.dmg
+
+      - name: Binary size
+        if: runner.os == 'Linux'
+        run: ls -lh target/release/microscope-rust

@@ -41,7 +41,9 @@ small, permissively licensed crates (see *Dependencies*), statically linked.
 Same features as the original application:
 
 - **Camera selection** among the connected USB cameras.
-- **Resolution and frame rate** selection from the camera capabilities.
+- **Resolution and frame rate** selection from the camera capabilities,
+  **remembered per camera** (with a closest-match fallback when the stored
+  resolution is no longer offered).
 - **Rotation** 0/90/180/270 and **mirroring** on both axes, **remembered per
   camera**.
 - **Navigation**: wheel zoom, left-drag pan, right-click fit.
@@ -107,6 +109,19 @@ ISCC packaging\windows\installer.iss   # Inno Setup 6 -> dist\Microscope-Setup-*
 sh packaging/macos/bundle.sh            # dist/Microscope.app + icon.icns
 sh packaging/macos/sign_and_notarize.sh # if signing secrets are set
 ```
+
+## Prebuilt binaries (CI)
+
+Every push to `main`, and every manual run of the **Build artifacts** workflow,
+produces ready-to-download packages in the repository's *Actions* tab:
+
+| OS | Artifacts |
+|---|---|
+| Linux | `Microscope-<ver>-x86_64.AppImage`, `microscope-rust-linux-x86_64.tar.gz` |
+| Windows | `Microscope-Setup-<ver>.exe`, `microscope-rust.exe` |
+| macOS | `Microscope.dmg`, `Microscope.app` |
+
+Tagged commits (`v*`) are also published on the GitHub Releases page.
 
 ## Code signing and notarization
 

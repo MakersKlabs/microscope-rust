@@ -32,6 +32,32 @@ fn sort_formats(mut formats: Vec<CameraFormat>) -> Vec<CameraFormat> {
     formats
 }
 
+/// Index of the resolution remembered for a camera. If the exact resolution is
+/// no longer offered, the closest one by area is used instead.
+fn resolution_index(resolutions: &[(u32, u32)], width: Option<u32>, height: Option<u32>) -> usize {
+    if let (Some(w), Some(h)) = (width, height) {
+        if let Some(index) = resolutions.iter().position(|res| *res == (w, h)) {
+            return index;
+        }
+        let target = w as i64 * h as i64;
+        if let Some((index, _)) = resolutions
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, res)| (res.0 as i64 * res.1 as i64 - target).abs())
+        {
+            return index;
+        }
+    }
+    0
+}
+
+/// Index of the frame rate remembered for a camera, falling back to the first
+/// (highest) available value.
+fn framerate_index(framerates: &[u32], fps: Option<u32>) -> usize {
+    fps.and_then(|value| framerates.iter().position(|candidate| *candidate == value))
+        .unwrap_or(0)
+}
+
 pub struct MicroscopeApp {
     settings: Settings,
     cameras: Vec<CameraEntry>,
@@ -171,11 +197,7 @@ impl MicroscopeApp {
         if self.resolutions.is_empty() {
             self.resolutions.push((0, 0));
         }
-        self.selected_resolution = stored
-            .width
-            .zip(stored.height)
-            .and_then(|(w, h)| self.resolutions.iter().position(|res| *res == (w, h)))
-            .unwrap_or(0);
+        self.selected_resolution = resolution_index(&self.resolutions, stored.width, stored.height);
         self.rebuild_framerates(stored.fps);
     }
 
@@ -194,9 +216,7 @@ impl MicroscopeApp {
         if self.framerates.is_empty() {
             self.framerates.push(30);
         }
-        self.selected_fps = wanted
-            .and_then(|fps| self.framerates.iter().position(|value| *value == fps))
-            .unwrap_or(0);
+        self.selected_fps = framerate_index(&self.framerates, wanted);
     }
 
     fn transform(&self) -> Transform {
@@ -840,5 +860,30 @@ impl MicroscopeApp {
             .unwrap_or(0);
         let minutes = seconds / 60;
         format!("{:02}:{:02}", minutes, seconds % 60)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{framerate_index, resolution_index};
+
+    #[test]
+    fn resolution_memory_prefers_exact_then_closest() {
+        let resolutions = [(1920u32, 1080u32), (1280, 720), (640, 480)];
+        // Exact match is honoured.
+        assert_eq!(resolution_index(&resolutions, Some(1280), Some(720)), 1);
+        // A resolution that disappeared falls back to the closest by area.
+        assert_eq!(resolution_index(&resolutions, Some(800), Some(600)), 2);
+        assert_eq!(resolution_index(&resolutions, Some(2560), Some(1440)), 0);
+        // Nothing stored -> first (highest) entry.
+        assert_eq!(resolution_index(&resolutions, None, None), 0);
+    }
+
+    #[test]
+    fn framerate_memory_falls_back_to_highest() {
+        let framerates = [30u32, 15, 5];
+        assert_eq!(framerate_index(&framerates, Some(15)), 1);
+        assert_eq!(framerate_index(&framerates, Some(60)), 0);
+        assert_eq!(framerate_index(&framerates, None), 0);
     }
 }

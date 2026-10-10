@@ -41,7 +41,9 @@ licenze permissive (vedi *Dipendenze*), linkati staticamente.
 Le stesse della versione originale:
 
 - **Selezione telecamera** tra le USB collegate.
-- **Selezione risoluzione e frame rate** dalle capacità della telecamera.
+- **Selezione risoluzione e frame rate** dalle capacita' della telecamera,
+  **con memoria per ogni camera** (con ripiego sulla risoluzione piu' vicina se
+  quella salvata non e' piu' disponibile).
 - **Rotazione** 0/90/180/270 e **specchiatura** sui due assi, **con memoria per
   ogni telecamera**.
 - **Navigazione**: zoom con rotellina, pan con trascinamento sinistro, fit con
@@ -108,6 +110,19 @@ ISCC packaging\windows\installer.iss   # Inno Setup 6 -> dist\Microscope-Setup-*
 sh packaging/macos/bundle.sh            # dist/Microscope.app + icon.icns
 sh packaging/macos/sign_and_notarize.sh # se i secret di firma sono impostati
 ```
+
+## Binari precompilati (CI)
+
+Ogni push su `main` e ogni esecuzione manuale del workflow **Build artifacts**
+produce pacchetti pronti da scaricare nella scheda *Actions* del repository:
+
+| OS | Artefatti |
+|---|---|
+| Linux | `Microscope-<ver>-x86_64.AppImage`, `microscope-rust-linux-x86_64.tar.gz` |
+| Windows | `Microscope-Setup-<ver>.exe`, `microscope-rust.exe` |
+| macOS | `Microscope.dmg`, `Microscope.app` |
+
+I commit con tag (`v*`) vengono anche pubblicati nella pagina GitHub Releases.
 
 ## Firma e notarizzazione
 
