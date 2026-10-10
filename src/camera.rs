@@ -6,54 +6,76 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use nokhwa::pixel_format::RgbFormat;
-use nokhwa::utils::{
-    ApiBackend, CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType,
-    Resolution,
-};
+use nokhwa::utils::{ApiBackend, CameraFormat, CameraIndex, RequestedFormat, RequestedFormatType};
 use nokhwa::Camera;
 
 use crate::frame::{SharedFrame, Transform};
 
 /// A camera found on the system.
+///
+/// Many USB cameras expose **two** device nodes with the same name: a real
+/// capture node and a metadata node. They are grouped here, and the working
+/// node (`active_index`) is resolved when the camera is probed.
 pub struct CameraEntry {
     pub key: String,
     pub name: String,
-    pub index: CameraIndex,
+    pub indices: Vec<CameraIndex>,
+    pub active_index: Option<CameraIndex>,
 }
 
-/// Enumerate the connected cameras.
+/// Enumerate the connected cameras, grouped by name and sorted by device number.
 pub fn enumerate() -> Vec<CameraEntry> {
-    nokhwa::query(ApiBackend::Auto)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|info| CameraEntry {
-            key: info.human_name(),
-            name: info.human_name(),
-            index: info.index().clone(),
-        })
-        .collect()
+    let mut entries: Vec<CameraEntry> = Vec::new();
+    for info in nokhwa::query(ApiBackend::Auto).unwrap_or_default() {
+        let name = info.human_name();
+        if let Some(existing) = entries.iter_mut().find(|entry| entry.name == name) {
+            existing.indices.push(info.index().clone());
+        } else {
+            entries.push(CameraEntry {
+                key: name.clone(),
+                name,
+                indices: vec![info.index().clone()],
+                active_index: None,
+            });
+        }
+    }
+
+    for entry in &mut entries {
+        entry.indices.sort_by_key(|index| index_number(index));
+        entry.indices.dedup();
+    }
+    entries.sort_by_key(|entry| entry.indices.first().map(index_number).unwrap_or(u32::MAX));
+    entries
 }
 
-/// Open the camera briefly to read its supported (width, height, fps) list.
-pub fn probe_formats(index: &CameraIndex) -> Result<Vec<(u32, u32, u32)>, String> {
-    let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
-    let mut camera = Camera::new(index.clone(), requested).map_err(|error| error.to_string())?;
-    let formats = camera
-        .compatible_camera_formats()
-        .map_err(|error| error.to_string())?;
-    let mut list: Vec<(u32, u32, u32)> = formats
-        .iter()
-        .map(|format| {
-            (
-                format.resolution().width(),
-                format.resolution().height(),
-                format.frame_rate(),
-            )
-        })
-        .collect();
-    list.sort_by(|a, b| (b.0 * b.1, b.2).cmp(&(a.0 * a.1, a.2)));
-    list.dedup();
-    Ok(list)
+fn index_number(index: &CameraIndex) -> u32 {
+    match index {
+        CameraIndex::Index(value) => *value,
+        CameraIndex::String(_) => u32::MAX,
+    }
+}
+
+/// Resolve the working device node and return its supported formats.
+///
+/// The metadata node of a camera fails to open, so the candidate nodes are
+/// tried in order until one exposes a usable format list.
+pub fn probe_formats(entry: &mut CameraEntry) -> Result<Vec<CameraFormat>, String> {
+    let mut last_error = String::from("no compatible device node");
+    for index in &entry.indices {
+        let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::None);
+        match Camera::new(index.clone(), requested) {
+            Ok(mut camera) => match camera.compatible_camera_formats() {
+                Ok(formats) if !formats.is_empty() => {
+                    entry.active_index = Some(index.clone());
+                    return Ok(formats);
+                }
+                Ok(_) => last_error = format!("{index:?}: no formats reported"),
+                Err(error) => last_error = format!("{index:?}: {error}"),
+            },
+            Err(error) => last_error = format!("{index:?}: {error}"),
+        }
+    }
+    Err(last_error)
 }
 
 /// Handles to a running capture thread.
@@ -109,14 +131,8 @@ impl Capture {
     }
 }
 
-/// Start capturing from `index`. A width/height of `0` selects the highest resolution.
-pub fn start(
-    index: CameraIndex,
-    width: u32,
-    height: u32,
-    fps: u32,
-    transform: Transform,
-) -> Capture {
+/// Start capturing from `index` using the exact `format` selected by the user.
+pub fn start(index: CameraIndex, format: Option<CameraFormat>, transform: Transform) -> Capture {
     let stop = Arc::new(AtomicBool::new(false));
     let latest = Arc::new(Mutex::new(None));
     let shared_transform = Arc::new(Mutex::new(transform));
@@ -138,9 +154,7 @@ pub fn start(
         .spawn(move || {
             run(
                 index,
-                width,
-                height,
-                fps,
+                format,
                 thread_stop,
                 thread_latest,
                 thread_transform,
@@ -167,9 +181,7 @@ pub fn start(
 #[allow(clippy::too_many_arguments)]
 fn run(
     index: CameraIndex,
-    width: u32,
-    height: u32,
-    fps: u32,
+    format: Option<CameraFormat>,
     stop: Arc<AtomicBool>,
     latest: Arc<Mutex<Option<SharedFrame>>>,
     transform: Arc<Mutex<Transform>>,
@@ -178,15 +190,11 @@ fn run(
     error: Arc<Mutex<Option<String>>>,
     measured: Arc<Mutex<f32>>,
 ) {
-    let requested = if width > 0 && height > 0 {
-        let format = CameraFormat::new(
-            Resolution::new(width, height),
-            FrameFormat::MJPEG,
-            if fps > 0 { fps } else { 30 },
-        );
-        RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(format))
-    } else {
-        RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestResolution)
+    // Use the exact format chosen by the user so the device never negotiates an
+    // unsupported resolution (which would result in a black "NO SIGNAL" view).
+    let requested = match format {
+        Some(format) => RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(format)),
+        None => RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestResolution),
     };
 
     let mut camera = match Camera::new(index, requested) {

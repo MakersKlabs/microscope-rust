@@ -4,6 +4,8 @@ use std::time::Instant;
 
 use eframe::egui::{self, Color32, RichText, TextureHandle, TextureOptions};
 
+use nokhwa::utils::{CameraFormat, FrameFormat};
+
 use crate::camera::{self, CameraEntry, Capture};
 use crate::frame::{SharedFrame, Transform};
 use crate::i18n;
@@ -15,13 +17,28 @@ use crate::util;
 
 const IMAGE_EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
+/// Order formats so that the default pick is the highest MJPEG resolution.
+fn sort_formats(mut formats: Vec<CameraFormat>) -> Vec<CameraFormat> {
+    formats.sort_by(|a, b| {
+        let area_a = a.resolution().width() * a.resolution().height();
+        let area_b = b.resolution().width() * b.resolution().height();
+        let mjpeg_a = matches!(a.format(), FrameFormat::MJPEG);
+        let mjpeg_b = matches!(b.format(), FrameFormat::MJPEG);
+        area_b
+            .cmp(&area_a)
+            .then(mjpeg_b.cmp(&mjpeg_a))
+            .then(b.frame_rate().cmp(&a.frame_rate()))
+    });
+    formats
+}
+
 pub struct MicroscopeApp {
     settings: Settings,
     cameras: Vec<CameraEntry>,
     selected_camera: usize,
     capture: Option<Capture>,
 
-    formats: Vec<(u32, u32, u32)>,
+    formats: Vec<CameraFormat>,
     resolutions: Vec<(u32, u32)>,
     selected_resolution: usize,
     framerates: Vec<u32>,
@@ -123,11 +140,20 @@ impl MicroscopeApp {
         self.flip_h = stored.flip_h;
         self.flip_v = stored.flip_v;
 
-        // Probe the supported formats (blocks briefly while opening the device).
-        let index = self.cameras[self.selected_camera].index.clone();
-        match camera::probe_formats(&index) {
-            Ok(formats) if !formats.is_empty() => self.formats = formats,
-            _ => self.formats = vec![(0, 0, 30)],
+        // Probe formats, resolving the working device node (a camera may expose
+        // a capture node and a metadata node with the same name).
+        let resolved = {
+            let entry = &mut self.cameras[self.selected_camera];
+            camera::probe_formats(entry)
+        };
+        self.formats = match resolved {
+            Ok(formats) if !formats.is_empty() => sort_formats(formats),
+            _ => Vec::new(),
+        };
+        if self.cameras[self.selected_camera].active_index.is_none() {
+            self.set_status(format!("{}: {}", t("error_open_camera"), key));
+            self.stop_capture();
+            return;
         }
         self.rebuild_resolutions(&stored);
         self.start_capture();
@@ -135,8 +161,16 @@ impl MicroscopeApp {
     }
 
     fn rebuild_resolutions(&mut self, stored: &CameraSettings) {
-        self.resolutions = self.formats.iter().map(|(w, h, _)| (*w, *h)).collect();
-        self.resolutions.dedup();
+        self.resolutions.clear();
+        for format in &self.formats {
+            let resolution = (format.resolution().width(), format.resolution().height());
+            if !self.resolutions.contains(&resolution) {
+                self.resolutions.push(resolution);
+            }
+        }
+        if self.resolutions.is_empty() {
+            self.resolutions.push((0, 0));
+        }
         self.selected_resolution = stored
             .width
             .zip(stored.height)
@@ -150,8 +184,10 @@ impl MicroscopeApp {
         self.framerates = self
             .formats
             .iter()
-            .filter(|(w, h, _)| Some((*w, *h)) == resolution)
-            .map(|(_, _, fps)| *fps)
+            .filter(|format| {
+                Some((format.resolution().width(), format.resolution().height())) == resolution
+            })
+            .map(|format| format.frame_rate())
             .collect();
         self.framerates.sort_unstable_by(|a, b| b.cmp(a));
         self.framerates.dedup();
@@ -173,21 +209,36 @@ impl MicroscopeApp {
 
     fn start_capture(&mut self) {
         self.stop_capture();
-        if self.cameras.is_empty() {
+        let index = self
+            .cameras
+            .get(self.selected_camera)
+            .and_then(|entry| entry.active_index.clone());
+        let Some(index) = index else {
             return;
-        }
-        let (width, height) = self
-            .resolutions
-            .get(self.selected_resolution)
-            .copied()
-            .unwrap_or((0, 0));
-        let fps = self
-            .framerates
-            .get(self.selected_fps)
-            .copied()
-            .unwrap_or(30);
-        let index = self.cameras[self.selected_camera].index.clone();
-        self.capture = Some(camera::start(index, width, height, fps, self.transform()));
+        };
+        let transform = self.transform();
+        let format = self.select_format();
+        self.capture = Some(camera::start(index, format, transform));
+    }
+
+    /// Pick the exact `CameraFormat` matching the selected resolution and fps.
+    fn select_format(&self) -> Option<CameraFormat> {
+        let resolution = self.resolutions.get(self.selected_resolution).copied()?;
+        let fps = self.framerates.get(self.selected_fps).copied();
+        let by_resolution = |format: &&CameraFormat| {
+            (format.resolution().width(), format.resolution().height()) == resolution
+        };
+        let exact = self.formats.iter().find(|format| {
+            by_resolution(format)
+                && Some(format.frame_rate()) == fps
+                && matches!(format.format(), FrameFormat::MJPEG)
+        });
+        let any_fps = self
+            .formats
+            .iter()
+            .find(|format| by_resolution(format) && Some(format.frame_rate()) == fps);
+        let any = self.formats.iter().find(|format| by_resolution(format));
+        exact.or(any_fps).or(any).cloned()
     }
 
     fn stop_capture(&mut self) {
@@ -549,6 +600,12 @@ impl MicroscopeApp {
                 if ui.checkbox(&mut self.flip_v, t("mirror_v")).changed() {
                     self.apply_transform();
                 }
+                if ui
+                    .checkbox(&mut self.settings.crt_effects, t("crt_effects"))
+                    .changed()
+                {
+                    self.save_settings();
+                }
 
                 ui.separator();
                 ui.label(
@@ -733,7 +790,9 @@ impl eframe::App for MicroscopeApp {
             });
 
         self.draw_settings(ctx);
-        theme::scanlines(ctx);
+        if self.settings.crt_effects {
+            theme::scanlines(ctx);
+        }
         ctx.request_repaint();
     }
 

@@ -50,7 +50,8 @@ Same features as the original application:
   remembering the last folder.
 - **Bilingual interface** (English / Italian).
 - **1980s terminal look**: phosphor green on black, monospace, hard bevels and
-  CRT scanlines.
+  CRT scanlines. The scanline overlay can be disabled from **Settings →
+  CRT effects**.
 
 ## Keyboard and mouse
 
@@ -79,6 +80,12 @@ Run it:
 
 ```bash
 cargo run --release
+```
+
+Diagnose the camera list (useful when a camera shows `NO SIGNAL`):
+
+```bash
+./target/release/microscope-rust --list-cameras
 ```
 
 ## Packaging

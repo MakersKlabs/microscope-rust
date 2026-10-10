@@ -29,6 +29,10 @@ fn default_bitrate() -> u32 {
     8000
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Global settings persisted in the user configuration directory.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
@@ -44,6 +48,8 @@ pub struct Settings {
     pub last_video_dir: Option<String>,
     #[serde(default = "default_bitrate")]
     pub bitrate_kbps: u32,
+    #[serde(default = "default_true")]
+    pub crt_effects: bool,
     #[serde(default)]
     pub window_size: Option<[f32; 2]>,
 }
@@ -57,6 +63,7 @@ impl Default for Settings {
             last_image_dir: None,
             last_video_dir: None,
             bitrate_kbps: default_bitrate(),
+            crt_effects: true,
             window_size: None,
         }
     }

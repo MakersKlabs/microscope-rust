@@ -38,6 +38,14 @@ fn load_icon() -> egui::IconData {
 }
 
 fn main() -> eframe::Result<()> {
+    // Diagnostic helper: list the detected cameras and exit.
+    if std::env::args().any(|arg| arg == "--list-cameras") {
+        for camera in camera::enumerate() {
+            println!("{}  ({:?})", camera.name, camera.indices);
+        }
+        return Ok(());
+    }
+
     let settings = settings::Settings::load();
     i18n::set_language(&settings.language);
 

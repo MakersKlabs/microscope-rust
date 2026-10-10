@@ -51,7 +51,8 @@ Le stesse della versione originale:
   ricordando l'ultima cartella.
 - **Interfaccia bilingue** (inglese / italiano).
 - **Grafica da terminale anni '80**: verde fosforo su nero, monospaziato,
-  bordi netti e scanline CRT.
+  bordi netti e scanline CRT. L'effetto scanline si puo' disattivare da
+  **Impostazioni → Effetti CRT**.
 
 ## Tastiera e mouse
 
@@ -80,6 +81,12 @@ Avvio:
 
 ```bash
 cargo run --release
+```
+
+Diagnostica dell'elenco telecamere (utile quando una camera mostra `NO SIGNAL`):
+
+```bash
+./target/release/microscope-rust --list-cameras
 ```
 
 ## Packaging
